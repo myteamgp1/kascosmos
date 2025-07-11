@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Search Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+        const { Search, Package, Database, ShoppingCart, Info, Tag, Star } = lucide;
+
+        const ProductSearchDashboard = () => {
+            const [productCode, setProductCode] = useState('');
+            const [searchHistory, setSearchHistory] = useState([]);
+            const [currentProduct, setCurrentProduct] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [savedItems, setSavedItems] = useState([]);
+            const [openWindows, setOpenWindows] = useState([]);
+
+            // Mock database - ในการใช้งานจริงจะเชื่อมต่อกับ n8n webhook
+            const mockDatabase = {
+                'PRD001': {
+                    id: 'PRD001',
+                    name: 'สมาร์ทโฟน Samsung Galaxy S24',
+                    description: 'สมาร์ทโฟนรุ่นใหม่ล่าสุด พร้อมกล้อง AI และชิป Snapdragon 8 Gen 3',
+                    price: 32900,
+                    category: 'อิเล็กทรอนิกส์',
+                    stock: 25,
+                    features: ['กล้อง 200MP', 'RAM 12GB', 'Storage 256GB', 'จอ Dynamic AMOLED 6.2"'],
+                    tags: ['สมาร์ทโฟน', 'Samsung', 'AI Camera', '5G'],
+                    rating: 4.8,
+                    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&h=300&fit=crop'
+                },
+                'PRD002': {
+                    id: 'PRD002',
+                    name: 'หูฟังไร้สาย AirPods Pro 2',
+                    description: 'หูฟังไร้สายพร้อมเทคโนโลยี Active Noise Cancellation',
+                    price: 8900,
+                    category: 'อุปกรณ์เสียง',
+                    stock: 15,
+                    features: ['ANC', 'Transparency Mode', 'Spatial Audio', 'MagSafe Charging'],
+                    tags: ['หูฟัง', 'Apple', 'Wireless', 'ANC'],
+                    rating: 4.7,
+                    image: 'https://images.unsplash.com/photo-1572569511254-d8f925fe2cbb?w=400&h=300&fit=crop'
+                },
+                'PRD003': {
+                    id: 'PRD003',
+                    name: 'โน้ตบุ๊ก MacBook Air M2',
+                    description: 'โน้ตบุ๊กที่บางเบาและทรงพลัง พร้อมชิป M2 ประสิทธิภาพสูง',
+                    price: 42900,
+                    category: 'คอมพิวเตอร์',
+                    stock: 8,
+                    features: ['ชิป M2', 'RAM 8GB', 'SSD 256GB', 'จอ Retina 13.6"'],
+                    tags: ['โน้ตบุ๊ก', 'Apple', 'M2', 'Ultrabook'],
+                    rating: 4.9,
+                    image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop'
+                }
+            };
+
+            const handleSearch = async () => {
+                if (!productCode.trim()) return;
+
+                setIsLoading(true);
+                
+                // จำลองการเรียก API/webhook
+                setTimeout(() => {
+                    const product = mockDatabase[productCode.toUpperCase()];
+                    
+                    if (product) {
+                        setCurrentProduct(product);
+                        
+                        // เพิ่มลงประวัติการค้นหา
+                        const newHistory = {
+                            id: Date.now(),
+                            code: productCode,
+                            timestamp: new Date().toLocaleString('th-TH'),
+                            found: true
+                        };
+                        setSearchHistory(prev => [newHistory, ...prev.slice(0, 9)]);
+                    } else {
+                        setCurrentProduct({
+                            error: true,
+                            message: `ไม่พบสินค้ารหัส "${productCode}" ในฐานข้อมูล`
+                        });
+                        
+                        const newHistory = {
+                            id: Date.now(),
+                            code: productCode,
+                            timestamp: new Date().toLocaleString('th-TH'),
+                            found: false
+                        };
+                        setSearchHistory(prev => [newHistory, ...prev.slice(0, 9)]);
+                    }
+                    
+                    setIsLoading(false);
+                }, 1000);
+            };
+
+            const handleSaveItem = (product) => {
+                if (savedItems.find(item => item.id === product.id)) return;
+                setSavedItems(prev => [...prev, product]);
+            };
+
+            const handleRemoveSaved = (productId) => {
+                setSavedItems(prev => prev.filter(item => item.id !== productId));
+            };
+
+            const handleHistoryClick = (code) => {
+                setProductCode(code);
+                handleSearch();
+            };
+
+            const openInNewWindow = (product) => {
+                const windowId = `product_${product.id}_${Date.now()}`;
+                const newWindow = {
+                    id: windowId,
+                    product: product,
+                    isMinimized: false
+                };
+                setOpenWindows(prev => [...prev, newWindow]);
+            };
+
+            const closeWindow = (windowId) => {
+                setOpenWindows(prev => prev.filter(w => w.id !== windowId));
+            };
+
+            const minimizeWindow = (windowId) => {
+                setOpenWindows(prev => prev.map(w => 
+                    w.id === windowId ? { ...w, isMinimized: !w.isMinimized } : w
+                ));
+            };
+
+            const ProductWindow = ({ window, onClose, onMinimize }) => {
+                const { product } = window;
+                
+                return React.createElement('div', {
+                    className: "fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
+                }, 
+                    React.createElement('div', {
+                        className: "bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+                    },
+                        React.createElement('div', {
+                            className: "bg-gray-100 px-4 py-3 flex justify-between items-center border-b"
+                        },
+                            React.createElement('div', {
+                                className: "flex items-center gap-3"
+                            },
+                                React.createElement('div', {
+                                    className: "flex gap-1"
+                                },
+                                    React.createElement('button', {
+                                        onClick: onClose,
+                                        className: "w-3 h-3 bg-red-500 rounded-full hover:bg-red-600"
+                                    }),
+                                    React.createElement('button', {
+                                        onClick: onMinimize,
+                                        className: "w-3 h-3 bg-yellow-500 rounded-full hover:bg-yellow-600"
+                                    }),
+                                    React.createElement('button', {
+                                        className: "w-3 h-3 bg-green-500 rounded-full hover:bg-green-600"
+                                    })
+                                ),
+                                React.createElement('span', {
+                                    className: "text-sm font-medium text-gray-700"
+                                }, `Product Detail - ${product.id}`)
+                            ),
+                            React.createElement('button', {
+                                onClick: onClose,
+                                className: "text-gray-500 hover:text-gray-700"
+                            }, '✕')
+                        ),
+                        React.createElement('div', {
+                            className: "overflow-y-auto max-h-[calc(90vh-4rem)]"
+                        },
+                            React.createElement('div', {
+                                className: "bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6"
+                            },
+                                React.createElement('div', {
+                                    className: "flex justify-between items-start"
+                                },
+                                    React.createElement('div', {},
+                                        React.createElement('h1', {
+                                            className: "text-3xl font-bold mb-2"
+                                        }, product.name),
+                                        React.createElement('p', {
+                                            className: "text-purple-100 text-lg"
+                                        }, product.description)
+                                    ),
+                                    React.createElement('div', {
+                                        className: "text-right"
+                                    },
+                                        React.createElement('div', {
+                                            className: "text-3xl font-bold"
+                                        }, `฿${product.price.toLocaleString()}`),
+                                        React.createElement('div', {
+                                            className: "text-purple-100"
+                                        }, `รหัส: ${product.id}`)
+                                    )
+                                )
+                            ),
+                            React.createElement('div', {
+                                className: "p-6"
+                            },
+                                React.createElement('div', {
+                                    className: "grid grid-cols-1 lg:grid-cols-2 gap-8"
+                                },
+                                    React.createElement('div', {},
+                                        React.createElement('img', {
+                                            src: product.image,
+                                            alt: product.name,
+                                            className: "w-full h-64 object-cover rounded-lg shadow-md"
+                                        })
+                                    ),
+                                    React.createElement('div', {
+                                        className: "space-y-6"
+                                    },
+                                        React.createElement('div', {
+                                            className: "grid grid-cols-2 gap-4"
+                                        },
+                                            React.createElement('div', {
+                                                className: "bg-gray-50 p-4 rounded-lg"
+                                            },
+                                                React.createElement('div', {
+                                                    className: "text-sm text-gray-600"
+                                                }, 'หมวดหมู่'),
+                                                React.createElement('div', {
+                                                    className: "font-semibold text-gray-800"
+                                                }, product.category)
+                                            ),
+                                            React.createElement('div', {
+                                                className: "bg-gray-50 p-4 rounded-lg"
+                                            },
+                                                React.createElement('div', {
+                                                    className: "text-sm text-gray-600"
+                                                }, 'คงเหลือ'),
+                                                React.createElement('div', {
+                                                    className: "font-semibold text-gray-800"
+                                                }, `${product.stock} ชิ้น`)
+                                            )
+                                        ),
+                                        React.createElement('div', {
+                                            className: "flex items-center gap-2"
+                                        },
+                                            React.createElement(Star, {
+                                                className: "w-5 h-5 text-yellow-400 fill-current"
+                                            }),
+                                            React.createElement('span', {
+                                                className: "font-semibold"
+                                            }, product.rating),
+                                            React.createElement('span', {
+                                                className: "text-gray-600"
+                                            }, '/ 5.0')
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                );
+            };
+
+            return React.createElement('div', {
+                className: "min-h-screen bg-gray-50 flex"
+            },
+                React.createElement('div', {
+                    className: "w-80 bg-white shadow-lg border-r border-gray-200"
+                },
+                    React.createElement('div', {
+                        className: "p-6"
+                    },
+                        React.createElement('div', {
+                            className: "flex items-center gap-2 mb-6"
+                        },
+                            React.createElement(Database, {
+                                className: "w-6 h-6 text-blue-600"
+                            }),
+                            React.createElement('h1', {
+                                className: "text-xl font-bold text-gray-800"
+                            }, 'Product Search')
+                        ),
+                        React.createElement('div', {
+                            className: "mb-6"
+                        },
+                            React.createElement('label', {
+                                className: "block text-sm font-medium text-gray-700 mb-2"
+                            }, 'รหัสสินค้า'),
+                            React.createElement('div', {
+                                className: "flex gap-2"
+                            },
+                                React.createElement('input', {
+                                    type: "text",
+                                    value: productCode,
+                                    onChange: (e) => setProductCode(e.target.value),
+                                    onKeyPress: (e) => e.key === 'Enter' && handleSearch(),
+                                    placeholder: "เช่น PRD001",
+                                    className: "flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                }),
+                                React.createElement('button', {
+                                    onClick: handleSearch,
+                                    disabled: isLoading,
+                                    className: "px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                },
+                                    isLoading ? 
+                                        React.createElement('div', {
+                                            className: "w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                                        }) :
+                                        React.createElement(Search, {
+                                            className: "w-4 h-4"
+                                        })
+                                )
+                            )
+                        ),
+                        searchHistory.length > 0 && React.createElement('div', {
+                            className: "mb-6"
+                        },
+                            React.createElement('h3', {
+                                className: "text-sm font-medium text-gray-700 mb-2"
+                            }, 'ประวัติการค้นหา'),
+                            React.createElement('div', {
+                                className: "space-y-1"
+                            },
+                                searchHistory.map(item => 
+                                    React.createElement('div', {
+                                        key: item.id,
+                                        onClick: () => handleHistoryClick(item.code),
+                                        className: `p-2 rounded-lg cursor-pointer text-sm ${
+                                            item.found 
+                                                ? 'bg-green-50 text-green-700 hover:bg-green-100' 
+                                                : 'bg-red-50 text-red-700 hover:bg-red-100'
+                                        }`
+                                    },
+                                        React.createElement('div', {
+                                            className: "font-medium"
+                                        }, item.code),
+                                        React.createElement('div', {
+                                            className: "text-xs opacity-75"
+                                        }, item.timestamp)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ),
+                React.createElement('div', {
+                    className: "flex-1 p-8"
+                },
+                    !currentProduct ? 
+                        React.createElement('div', {
+                            className: "h-full flex items-center justify-center"
+                        },
+                            React.createElement('div', {
+                                className: "text-center"
+                            },
+                                React.createElement(Package, {
+                                    className: "w-16 h-16 text-gray-400 mx-auto mb-4"
+                                }),
+                                React.createElement('h2', {
+                                    className: "text-2xl font-bold text-gray-600 mb-2"
+                                }, 'ค้นหาสินค้า'),
+                                React.createElement('p', {
+                                    className: "text-gray-500"
+                                }, 'กรุณาใส่รหัสสินค้าเพื่อเริ่มค้นหา'),
+                                React.createElement('div', {
+                                    className: "mt-4 text-sm text-gray-400"
+                                },
+                                    React.createElement('p', {}, 'ตัวอย่างรหัสสินค้า: PRD001, PRD002, PRD003')
+                                )
+                            )
+                        ) :
+                    currentProduct.error ?
+                        React.createElement('div', {
+                            className: "h-full flex items-center justify-center"
+                        },
+                            React.createElement('div', {
+                                className: "text-center"
+                            },
+                                React.createElement('div', {
+                                    className: "w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"
+                                },
+                                    React.createElement(Info, {
+                                        className: "w-8 h-8 text-red-600"
+                                    })
+                                ),
+                                React.createElement('h2', {
+                                    className: "text-2xl font-bold text-red-600 mb-2"
+                                }, 'ไม่พบสินค้า'),
+                                React.createElement('p', {
+                                    className: "text-gray-600"
+                                }, currentProduct.message)
+                            )
+                        ) :
+                        React.createElement('div', {
+                            className: "max-w-4xl mx-auto"
+                        },
+                            React.createElement('div', {
+                                className: "bg-white rounded-xl shadow-lg overflow-hidden"
+                            },
+                                React.createElement('div', {
+                                    className: "bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6"
+                                },
+                                    React.createElement('div', {
+                                        className: "flex justify-between items-start"
+                                    },
+                                        React.createElement('div', {},
+                                            React.createElement('h1', {
+                                                className: "text-3xl font-bold mb-2"
+                                            }, currentProduct.name),
+                                            React.createElement('p', {
+                                                className: "text-blue-100 text-lg"
+                                            }, currentProduct.description)
+                                        ),
+                                        React.createElement('div', {
+                                            className: "text-right"
+                                        },
+                                            React.createElement('div', {
+                                                className: "text-3xl font-bold"
+                                            }, `฿${currentProduct.price.toLocaleString()}`),
+                                            React.createElement('div', {
+                                                className: "text-blue-100"
+                                            }, `รหัส: ${currentProduct.id}`)
+                                        )
+                                    )
+                                ),
+                                React.createElement('div', {
+                                    className: "p-6"
+                                },
+                                    React.createElement('div', {
+                                        className: "grid grid-cols-1 lg:grid-cols-2 gap-8"
+                                    },
+                                        React.createElement('div', {},
+                                            React.createElement('img', {
+                                                src: currentProduct.image,
+                                                alt: currentProduct.name,
+                                                className: "w-full h-64 object-cover rounded-lg shadow-md"
+                                            })
+                                        ),
+                                        React.createElement('div', {
+                                            className: "space-y-6"
+                                        },
+                                            React.createElement('div', {
+                                                className: "grid grid-cols-2 gap-4"
+                                            },
+                                                React.createElement('div', {
+                                                    className: "bg-gray-50 p-4 rounded-lg"
+                                                },
+                                                    React.createElement('div', {
+                                                        className: "text-sm text-gray-600"
+                                                    }, 'หมวดหมู่'),
+                                                    React.createElement('div', {
+                                                        className: "font-semibold text-gray-800"
+                                                    }, currentProduct.category)
+                                                ),
+                                                React.createElement('div', {
+                                                    className: "bg-gray-50 p-4 rounded-lg"
+                                                },
+                                                    React.createElement('div', {
+                                                        className: "text-sm text-gray-600"
+                                                    }, 'คงเหลือ'),
+                                                    React.createElement('div', {
+                                                        className: "font-semibold text-gray-800"
+                                                    }, `${currentProduct.stock} ชิ้น`)
+                                                )
+                                            ),
+                                            React.createElement('div', {
+                                                className: "flex items-center gap-2"
+                                            },
+                                                React.createElement(Star, {
+                                                    className: "w-5 h-5 text-yellow-400 fill-current"
+                                                }),
+                                                React.createElement('span', {
+                                                    className: "font-semibold"
+                                                }, currentProduct.rating),
+                                                React.createElement('span', {
+                                                    className: "text-gray-600"
+                                                }, '/ 5.0')
+                                            ),
+                                            React.createElement('div', {},
+                                                React.createElement('h3', {
+                                                    className: "font-semibold text-gray-800 mb-3"
+                                                }, 'คุณสมบัติเด่น'),
+                                                React.createElement('ul', {
+                                                    className: "space-y-2"
+                                                },
+                                                    currentProduct.features.map((feature, index) =>
+                                                        React.createElement('li', {
+                                                            key: index,
+                                                            className: "flex items-center gap-2"
+                                                        },
+                                                            React.createElement('div', {
+                                                                className: "w-2 h-2 bg-blue-600 rounded-full"
+                                                            }),
+                                                            React.createElement('span', {
+                                                                className: "text-gray-700"
+                                                            }, feature)
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            React.createElement('div', {},
+                                                React.createElement('h3', {
+                                                    className: "font-semibold text-gray-800 mb-3"
+                                                }, 'แท็ก'),
+                                                React.createElement('div', {
+                                                    className: "flex flex-wrap gap-2"
+                                                },
+                                                    currentProduct.tags.map((tag, index) =>
+                                                        React.createElement('span', {
+                                                            key: index,
+                                                            className: "px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                                                        },
+                                                            React.createElement(Tag, {
+                                                                className: "w-3 h-3 inline mr-1"
+                                                            }),
+                                                            tag
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            React.createElement('div', {
+                                                className: "flex gap-3"
+                                            },
+                                                React.createElement('button', {
+                                                    onClick: () => handleSaveItem(currentProduct),
+                                                    disabled: savedItems.find(item => item.id === currentProduct.id),
+                                                    className: "bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                },
+                                                    React.createElement(Package, {
+                                                        className: "w-4 h-4"
+                                                    }),
+                                                    savedItems.find(item => item.id === currentProduct.id) ? 'บันทึกแล้ว' : 'บันทึกรายการ'
+                                                ),
+                                                React.createElement('button', {
+                                                    onClick: () => openInNewWindow(currentProduct),
+                                                    className: "bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+                                                },
+                                                    React.createElement('svg', {
+                                                        className: "w-4 h-4",
+                                                        fill: "none",
+                                                        stroke: "currentColor",
+                                                        viewBox: "0 0 24 24"
+                                                    },
+                                                        React.createElement('path', {
+                                                            strokeLinecap: "round",
+                                                            strokeLinejoin: "round",
+                                                            strokeWidth: 2,
+                                                            d: "M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                                        })
+                                                    ),
+                                                    'เปิดหน้าต่างใหม่'
+                                                ),
+                                                React.createElement('button', {
+                                                    className: "bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                                                },
+                                                    React.createElement(ShoppingCart, {
+                                                        className: "w-4 h-4"
+                                                    }),
+                                                    'สั่งซื้อ'
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                ),
+                openWindows.map(window =>
+                    !window.isMinimized && React.createElement(ProductWindow, {
+                        key: window.id,
+                        window: window,
+                        onClose: () => closeWindow(window.id),
+                        onMinimize: () => minimizeWindow(window.id)
+                    })
+                ),
+                openWindows.some(w => w.isMinimized) && React.createElement('div', {
+                    className: "fixed bottom-4 left-4 right-4 bg-gray-800 rounded-lg p-2 flex gap-2 z-40"
+                },
+                    openWindows.filter(w => w.isMinimized).map(window =>
+                        React.createElement('button', {
+                            key: window.id,
+                            onClick: () => minimizeWindow(window.id),
+                            className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 flex items-center gap-2"
+                        },
+                            React.createElement(Package, {
+                                className: "w-3 h-3"
+                            }),
+                            window.product.id,
+                            React.createElement('button', {
+                                onClick: (e) => {
+                                    e.stopPropagation();
+                                    closeWindow(window.id);
+                                },
+                                className: "text-gray-300 hover:text-white ml-1"
+                            }, '✕')
+                        )
+                    )
+                )
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(React.createElement(ProductSearchDashboard), document.getElementById('root'));
+    </script>
+</body>
+</html>
